@@ -27,6 +27,7 @@ import re
 import os
 from icdcodex import icd2vec, hierarchy
 from rapidfuzz import process, fuzz
+from datetime import datetime
 
 import nltk
 from nltk.stem import WordNetLemmatizer
@@ -78,6 +79,9 @@ def find_icd_with_embedding(diagnosis, ref_df, top_k=3):
         })
     return matches
 
+# Try to load the PayPal URL from the environment; if missing, use a placeholder
+paypal_url = os.getenv("PAYPAL_URL", "https://www.paypal.com/donate/dummy-link")
+
 # ========== Gradio Interface Logic ==========
 def preprocess_input(text):
     """
@@ -124,6 +128,23 @@ def process_diagnosis(input_text):
 def clear_input():
     return "", ""
 
+def save_suggestion(suggestion):
+    if not suggestion.strip():
+        return "⚠️ Please enter a suggestion.", None
+
+    # Save to a visible path
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    base_dir = "/home/user/suggestions"
+    os.makedirs(base_dir, exist_ok=True)
+    filepath = os.path.join(base_dir, f"suggestions_{today_str}.txt")
+
+    # Append suggestion
+    with open(filepath, "a", encoding="utf-8") as f:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        f.write(f"[{timestamp}] {suggestion.strip()}\n")
+
+    return "✅ Suggestion saved!", filepath
+    
 # ========== Build Gradio UI ==========
 with gr.Blocks() as demo:
     gr.Markdown("# 🩺 NadanaMap\nICD-10 Diagnosis Mapper")
@@ -138,10 +159,33 @@ with gr.Blocks() as demo:
     submit_btn.click(process_diagnosis, inputs=input_box, outputs=output_box)
     clear_btn.click(fn=clear_input, inputs=[], outputs=[input_box, output_box])
 
+    with gr.Row():
+        suggestion_input = gr.Textbox(label="💡 Suggest a Feature")
+        suggestion_submit = gr.Button("Submit Suggestion")
+    
+    with gr.Row():
+        suggestion_status = gr.Textbox(label="Status", interactive=False)
+        suggestion_file = gr.File(label="📥 Download Today's Suggestions", visible=True)
+
+    suggestion_submit.click(
+        fn=save_suggestion,
+        inputs=suggestion_input,
+        outputs=[suggestion_status, suggestion_file]
+    )
+    
+    with gr.Row():
+        gr.HTML(f"""
+        <a href="{paypal_url}" target="_blank">
+            <button style="background-color:#0070ba;color:white;border:none;padding:10px 20px;
+            font-size:16px;border-radius:5px;cursor:pointer;margin-top:10px;">
+                ❤️ Support Research via PayPal
+            </button>
+        </a>
+        """)
+
 # Launch the app
 # Determine if running on Hugging Face Spaces
 on_spaces = os.environ.get("SPACE_ID") is not None
 
 # Launch the app conditionally
 demo.launch(share=not on_spaces)
-# demo.launch(debug=False, share=True)
