@@ -18,12 +18,27 @@ install_if_missing("rapidfuzz")
 install_if_missing("icdcodex")
 install_if_missing("pandas")
 install_if_missing("gradio")
+install_if_missing("nltk")
 
 import gradio as gr
 import pandas as pd
+import icd10
+import re
+import os
 from icdcodex import icd2vec, hierarchy
 from rapidfuzz import process, fuzz
-import icd10
+
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
+
+# Ensure required data is downloaded (only needed once)
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
+nltk.download('wordnet', quiet=True)
+nltk.download('omw-1.4', quiet=True)
+
+lemmatizer = WordNetLemmatizer()
 
 # ========== Setup: Load ICD Hierarchy and Train Embeddings ==========
 icd_graph, icd_code_list = hierarchy.icd10cm()
@@ -64,6 +79,25 @@ def find_icd_with_embedding(diagnosis, ref_df, top_k=3):
     return matches
 
 # ========== Gradio Interface Logic ==========
+def preprocess_input(text):
+    """
+    Preprocess the diagnosis text by:
+    - Lowercasing
+    - Removing special characters
+    - Normalising whitespace
+    - Lemmatising each word
+    """
+    if not isinstance(text, str):
+        return ""
+    
+    text = text.lower()
+    text = re.sub(r'[^a-z0-9\s\-]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    tokens = nltk.word_tokenize(text)
+    lemmatized = [lemmatizer.lemmatize(word) for word in tokens]
+    return ' '.join(lemmatized)
+    
 def format_results(diagnosis, matches):
     output_md = f"### 📋 Results for: **{diagnosis}**\n\n"
     for match in matches:
@@ -81,8 +115,10 @@ def process_diagnosis(input_text):
     if not input_text.strip():
         return "❌ Please enter a diagnosis to search."
 
-    matches = find_icd_with_embedding(input_text.strip(), icd_ref, top_k=3)
-    result = format_results(input_text, matches)
+    initial_input = input_text.strip()
+    cleaned_input = preprocess_input(initial_input)
+    matches = find_icd_with_embedding(cleaned_input, icd_ref, top_k=3)
+    result = format_results(initial_input, matches)
     return result
 
 def clear_input():
@@ -103,4 +139,9 @@ with gr.Blocks() as demo:
     clear_btn.click(fn=clear_input, inputs=[], outputs=[input_box, output_box])
 
 # Launch the app
-demo.launch(share=True, debug=False)
+# Determine if running on Hugging Face Spaces
+on_spaces = os.environ.get("SPACE_ID") is not None
+
+# Launch the app conditionally
+demo.launch(share=not on_spaces)
+# demo.launch(debug=False, share=True)
