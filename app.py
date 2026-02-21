@@ -42,7 +42,9 @@ nltk.download('omw-1.4', quiet=True)
 lemmatizer = WordNetLemmatizer()
 
 # ========== Setup: Load ICD Hierarchy and Train Embeddings ==========
-icd_graph, icd_code_list = hierarchy.icd10cm()
+# icd_graph, icd_code_list = hierarchy.icd10cm()
+# from icdcodex import hierarchy
+icd_graph, icd_code_list = hierarchy.icd10cm("2025")  # or "2024", etc.
 
 embedder = icd2vec.Icd2Vec(num_embedding_dimensions=64, workers=-1)
 embedder.fit(icd_graph, icd_code_list)
@@ -144,17 +146,32 @@ def save_suggestion(suggestion):
         f.write(f"[{timestamp}] {suggestion.strip()}\n")
 
     return "✅ Suggestion saved!", filepath
+
+APP_TITLE = "🩺 NidanaMap: ICD-10 Diagnosis Mapper"
+APP_DESCRIPTION = (
+    "NidanaMap is an intelligent ICD-10 diagnosis mapper designed to bridge clinical expressions with their corresponding ICD-10 codes."
+    "Whether you’re a medical practitioner, coder, researcher, or student, this tool simplifies the task of identifying, validating, and mapping diagnostic phrases to globally recognised classifications." 
+    "Fast, reliable, and intuitive — NidanaMap helps streamline documentation, billing, and data analysis with clinical accuracy."
+)
     
 # ========== Build Gradio UI ==========
-with gr.Blocks() as demo:
-    gr.Markdown("# 🩺 NadanaMap\nICD-10 Diagnosis Mapper")
+with gr.Blocks() as app:
+    # Title and Description
+    gr.HTML(
+        f"""
+        <p style='text-align: center; font-size: 40px; font-weight: bold;'>{APP_TITLE}</p>
+        <p style='text-align: center; font-size: 20px; color: #555;'><sub>{APP_DESCRIPTION}</sub></p>
+        <hr>
+        """
+    )
+    
     with gr.Row():
         input_box = gr.Textbox(label="Enter a diagnosis", placeholder="e.g., Diabetes mellitus without complications")
     with gr.Row():
         submit_btn = gr.Button("Submit")
         clear_btn = gr.Button("Clear")
     with gr.Row():
-        output_box = gr.Markdown()
+        output_box = gr.Markdown(value="", show_copy_button=True)
 
     submit_btn.click(process_diagnosis, inputs=input_box, outputs=output_box)
     clear_btn.click(fn=clear_input, inputs=[], outputs=[input_box, output_box])
@@ -183,9 +200,28 @@ with gr.Blocks() as demo:
         </a>
         """)
 
-# Launch the app
-# Determine if running on Hugging Face Spaces
-on_spaces = os.environ.get("SPACE_ID") is not None
+    with gr.Row():
+        gr.HTML("""
+        <a href="https://huggingface.co/spaces/partha6369/partha-research-centre"
+           target="_blank"
+           rel="noopener noreferrer">
+            <button style="
+                background-color:#111827;
+                color:white;
+                border:none;
+                padding:10px 20px;
+                font-size:16px;
+                border-radius:8px;
+                cursor:pointer;
+                margin-top:10px;">
+                🔗 Dr Partha Majumdar's Research Centre
+            </button>
+        </a>
+        """)
 
-# Launch the app conditionally
-demo.launch(share=not on_spaces)
+if __name__ == "__main__":
+    # Determine if running on Hugging Face Spaces
+    on_spaces = os.environ.get("SPACE_ID") is not None
+    
+    # Launch the app conditionally
+    app.launch(share=not on_spaces)
